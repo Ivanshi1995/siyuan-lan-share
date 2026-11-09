@@ -1,0 +1,10 @@
+'use strict';
+const fs=require('node:fs');const path=require('node:path');
+const [owner,author=owner]=process.argv.slice(2);
+if(!/^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/.test(owner || ''))throw new Error('请提供有效的 GitHub 用户名或组织名。');
+if(!author?.trim() || /[<>\r\n]/.test(author))throw new Error('请提供有效的作者名称。');
+const root=path.resolve(__dirname,'..');const file=path.join(root,'plugin.json');const plugin=JSON.parse(fs.readFileSync(file,'utf8'));
+plugin.author=author.trim();plugin.url=`https://github.com/${owner}/${plugin.name}`;
+fs.writeFileSync(file,JSON.stringify(plugin,null,2)+'\n');
+const pkgFile=path.join(root,'package.json');const pkg=JSON.parse(fs.readFileSync(pkgFile,'utf8'));pkg.author=plugin.author;pkg.repository={type:'git',url:plugin.url+'.git'};fs.writeFileSync(pkgFile,JSON.stringify(pkg,null,2)+'\n');
+console.log('已填写作者与仓库地址：'+plugin.url);

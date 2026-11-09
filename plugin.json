@@ -1,0 +1,32 @@
+{
+  "name": "siyuan-lan-share",
+  "author": "Ivanshi1995",
+  "url": "https://github.com/Ivanshi1995/siyuan-lan-share",
+  "version": "0.2.2",
+  "minAppVersion": "3.8.9",
+  "backends": [
+    "windows"
+  ],
+  "frontends": [
+    "desktop"
+  ],
+  "disabledInPublish": true,
+  "displayName": {
+    "default": "局域网分享",
+    "zh-CN": "局域网分享"
+  },
+  "description": {
+    "default": "将文档及全部子文档发布为局域网只读链接"
+  },
+  "readme": {
+    "default": "README.md"
+  },
+  "icon": "icon.png",
+  "preview": "preview.png",
+  "keywords": [
+    "分享",
+    "局域网",
+    "子文档",
+    "只读"
+  ]
+}

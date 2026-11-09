@@ -1,0 +1,21 @@
+{
+  "name": "siyuan-lan-share",
+  "version": "0.2.2",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build.cjs",
+    "test": "node --test test/*.test.cjs",
+    "check:release": "node scripts/check-release.cjs",
+    "package": "npm run build && python scripts/package.py",
+    "prepare:owner": "node scripts/prepare-owner.cjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "Ivanshi1995",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ivanshi1995/siyuan-lan-share.git"
+  }
+}

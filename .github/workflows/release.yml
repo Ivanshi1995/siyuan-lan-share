@@ -1,0 +1,28 @@
+name: 发布插件
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: 核对标签版本
+        run: node -e "if(process.env.GITHUB_REF_NAME!=='v'+require('./plugin.json').version)process.exit(1)"
+      - run: npm run check:release
+      - run: npm run build
+      - run: npm test
+      - run: python scripts/package.py
+      - name: 创建正式版本
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release create "$RELEASE_TAG" package.zip SHA256SUMS --verify-tag --title "$RELEASE_TAG" --notes-file RELEASE_NOTES.md --latest
