@@ -2,7 +2,7 @@
   "name": "siyuan-lan-share",
   "author": "Ivanshi1995",
   "url": "https://github.com/Ivanshi1995/siyuan-lan-share",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "minAppVersion": "3.8.9",
   "backends": [
     "windows"
@@ -22,7 +22,7 @@
     "default": "README.md"
   },
   "icon": "icon.png",
-  "preview": "preview.png",
+  "preview": "preview.jpg",
   "keywords": [
     "分享",
     "局域网",

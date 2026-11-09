@@ -5,7 +5,7 @@ from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED, ZipInfo
 
 root = Path(__file__).resolve().parent.parent
-files = ['LICENSE', 'README.md', 'icon.png', 'index.css', 'index.js', 'plugin.json', 'preview.png']
+files = ['LICENSE', 'README.md', 'icon.png', 'index.css', 'index.js', 'plugin.json', 'preview.jpg']
 archive = root / 'package.zip'
 with ZipFile(archive, 'w', compression=ZIP_DEFLATED) as z:
     for name in files:
