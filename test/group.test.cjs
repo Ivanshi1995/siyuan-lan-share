@@ -20,7 +20,7 @@ function plugin(api) {
   if(id==='siyuan')return {Plugin:class {}};
   if(id==='./group.cjs')return nativeRequire('../src/group.cjs');
   if(id==='./server.cjs')return nativeRequire('../src/server.cjs');
-  if(id==='./snapshot.cjs')return {...nativeRequire('../src/snapshot.cjs'),snapshot:async html=>({html})};return nativeRequire(id);
+  if(id==='./snapshot.cjs')return {...nativeRequire('../src/snapshot.cjs'),snapshot:async html=>({html})};if(id.startsWith('./'))return nativeRequire('../src/'+id.slice(2));return nativeRequire(id);
  }});
  const p=new mod.exports();p.api=api;p.state={port:17239,shares:{}};p.saveData=async()=>{};return p;
 }

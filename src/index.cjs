@@ -5,14 +5,17 @@ const {snapshot,reuseDocument} = require('./snapshot.cjs');
 const {createHash} = require('node:crypto');
 const {collectDocuments,sameScope,buildGroup} = require('./group.cjs');
 const {Buffer} = require('node:buffer');
+const {createPanel} = require('./panel.cjs');
+const {symbol} = require('./ui-icons.cjs');
 module.exports = class LanShare extends Plugin {
   async onload() {
     if(getFrontend()!=='desktop') return;
     this.state=await this.loadData('shares.json') || {port:17239,shares:{}};
     this.service=new ShareServer(()=>this.state.shares);
-    this.addTopBar({icon:'iconUpload',title:'局域网分享',position:'right',callback:()=>this.openSetting()});
+    this.addIcons(symbol);
+    this.addTopBar({icon:'iconLanShare',title:'局域网分享',position:'right',callback:()=>this.openSetting()});
   }
-  async onunload() { await this.service?.stop(); this.dialog?.destroy(); }
+  async onunload() { this.panel?.destroy(); await this.service?.stop(); this.dialog?.destroy(); }
   onDataChanged() { /* Local snapshots are committed by persist. */ }
   async api(path,body) {
     const res=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
@@ -68,44 +71,13 @@ module.exports = class LanShare extends Plugin {
   }
   openSetting() {
     if(!this.service) return showMessage('此插件需要思源桌面端。');
-    this.dialog?.destroy();
-    const dialog=new Dialog({title:'局域网分享',width:'760px',content:'<div class="lan-share-panel"></div>'}); this.dialog=dialog;
-    const host=dialog.element.querySelector('.lan-share-panel');
-    let busy=false; let selectedId=''; let includeChildren=false; let preview=null;
-    const action=(label,fn)=>{const b=document.createElement('button');b.className='b3-button';b.textContent=label;b.onclick=async()=>{if(busy)return;busy=true;b.disabled=true;try{await fn();render();}catch(e){preview=null;render();showMessage(e.message || '操作失败。请重试。',7000,'error');}finally{busy=false;b.disabled=false;}};return b;};
-    const line=text=>{const p=document.createElement('p');p.textContent=text;host.append(p);};
-    const input=(label,value,placeholder)=>{const wrap=document.createElement('label');wrap.textContent=label;const i=document.createElement('input');i.className='b3-text-field';i.value=value;i.placeholder=placeholder;wrap.append(i);host.append(wrap);return i;};
-    const render=()=>{
-      host.replaceChildren();line('分享范围：持有链接的人可读取文档和附件。');
-      line('服务状态：'+(this.service.server?'正在运行':'已停止'));
-      const port=input('服务端口：',this.state.port,'17239');port.type='number';port.disabled=!!this.service.server;
-      host.append(action(this.service.server?'停止服务':'启动服务',async()=>{
-        if(this.service.server) await this.service.stop();
-        else {const next={...this.state,port:Number(port.value)};await this.service.start(next.port);try{await this.persist(next);}catch(e){await this.service.stop();throw e;}}
-      }));
-      line('发布方式：预览文档清单后发布。更新时复用未改动的正文。');
-      const editors=getAllEditor(); const current=editors.find(e=>e.protyle?.element?.closest('.layout__wnd--active')) || (editors.length===1?editors[0]:null);
-      if(!selectedId) selectedId=current?.protyle?.block?.rootID || '';
-      const id=input('文档编号：',selectedId,'20261109120000-abcdefg');
-      const option=document.createElement('label');const check=document.createElement('input');check.type='checkbox';check.checked=includeChildren;option.append(check,document.createTextNode('包含子文档：分享全部层级，含隐藏文档。'));host.append(option);
-      const invalidate=()=>{selectedId=id.value.trim();includeChildren=check.checked;preview=null;host.querySelector('.lan-share-preview')?.remove();};id.oninput=invalidate;check.onchange=invalidate;
-      host.append(action('预览分享范围',async()=>{selectedId=id.value.trim();includeChildren=check.checked;preview=await this.collect(selectedId,includeChildren);}));
-      if(preview) {
-        const box=document.createElement('section');box.className='lan-share-preview';const label=document.createElement('p');label.textContent=`分享范围：共 ${preview.length} 篇。持有链接的人可读取全部文档。`;box.append(label);
-        const list=document.createElement('ul');list.className='lan-share-doc-list';for(const doc of preview){const item=document.createElement('li');item.textContent=doc.title;item.style.marginLeft=(doc.depth*16)+'px';list.append(item);}box.append(list);
-        box.append(action('发布此范围',async()=>{await this.publish(selectedId,includeChildren,preview);preview=null;}));host.append(box);
-      }
-      const ips=addresses(); if(!ips.length) line('网络地址：未发现局域网地址。请连接局域网。');
-      if(!Object.keys(this.state.shares).length) line('分享列表：尚未发布。请在上方填写文档编号并发布。');
-      for(const [token,s] of Object.entries(this.state.shares)) {
-        const row=document.createElement('section');const title=document.createElement('strong');title.textContent=s.title;row.append(title);
-        const count=document.createElement('p');count.textContent=`分享范围：${s.includeChildren?'包含全部子文档':'仅此文档'}，已发布 ${s.docs?.length || 1} 篇。`;row.append(count);
-        if(s.stats){const result=document.createElement('p');result.textContent=`最近更新：渲染 ${s.stats.rendered} 篇，复用 ${s.stats.reused} 篇；附件更新 ${s.stats.assetsChanged} 个，复用 ${s.stats.assetsReused} 个。`;row.append(result);}
-        for(const ip of ips) {const url=`http://${ip}:${this.state.port}/s/${token}/`;const p=document.createElement('p');const field=document.createElement('input');field.readOnly=true;field.value=url;field.className='b3-text-field';field.onclick=()=>field.select();p.append(field,action('复制链接',()=>navigator.clipboard.writeText(url)));row.append(p);}
-        row.append(action('预览并更新',async()=>{selectedId=s.id;includeChildren=!!s.includeChildren;preview=await this.collect(selectedId,includeChildren);}),action(s.includeChildren?'撤销整组分享':'撤销分享',async()=>{const shares={...this.state.shares};delete shares[token];await this.persist({...this.state,shares});}));host.append(row);
-      }
-      line('连接条件：两台设备须能互相访问此端口。');
-      line('运行条件：关闭思源或停用插件会停止服务。重启后需手动启动。');
-    };render();
+    this.panel?.destroy();this.dialog?.destroy();
+    const dialog=new Dialog({title:'局域网分享',width:'860px',content:'<div class="lan-share-panel"></div>'});
+    this.dialog=dialog;
+    this.panel=createPanel(this,dialog.element.querySelector('.lan-share-panel'),{
+      getAllEditor,addresses,version:'0.4.0',
+      copy:url=>navigator.clipboard.writeText(url),
+      open:url=>require('electron').shell.openExternal(url),
+    });
   }
 };
