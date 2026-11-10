@@ -2,7 +2,7 @@
   "name": "siyuan-lan-share",
   "author": "Ivanshi1995",
   "url": "https://github.com/Ivanshi1995/siyuan-lan-share",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "minAppVersion": "3.8.9",
   "backends": [
     "windows"

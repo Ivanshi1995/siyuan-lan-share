@@ -1,4 +1,5 @@
 'use strict';
+const preview=require('./preview.cjs');
 const escape = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const css = `
 :root{color-scheme:light dark;--page:#f7f8fa;--surface:#fff;--text:#243044;--muted:#65738a;--border:#dde3eb;--link:#2465bb;--code:#eef1f5;--selected:#eaf1fb}
@@ -46,6 +47,6 @@ function renderPage(share,docs,page,base) {
   const nav=share.includeChildren ? `<aside class="directory-panel"><input class="directory-toggle" id="directory-toggle" type="checkbox" aria-label="切换文档目录"><label class="directory-trigger" for="directory-toggle">文档目录 · ${docs.length} 篇</label><nav class="directory-nav" aria-label="文档目录"><h2>文档目录 · ${docs.length} 篇</h2><ul class="doc-tree">${docs.map(d=>`<li style="--depth:${Math.min(8,Math.max(0,Number(d.depth)||0))}"><a href="${base}d/${escape(d.id)}/" title="${escape(d.title)}"${d.id===page.id?' aria-current="page"':''}>${escape(d.title)}</a></li>`).join('')}</ul></nav></aside>` : '';
   const html=page.html.replace(/\b(src|href)="assets\/([a-f0-9]{64})"/g,`$1="${base}assets/$2"`);
   const main=`<main><header><h1>${escape(page.title)}</h1></header><article>${html}</article></main>`;
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(page.title)}</title><style>${css}</style></head><body>${nav?`<div class="share-layout">${nav}${main}</div>`:main}</body></html>`;
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(page.title)}</title><style>${css}${preview.css}</style></head><body>${nav?`<div class="share-layout">${nav}${main}</div>`:main}${preview.markup}<script>${preview.script}</script></body></html>`;
 }
 module.exports={renderPage,escape};

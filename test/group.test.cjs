@@ -20,7 +20,7 @@ function plugin(api) {
   if(id==='siyuan')return {Plugin:class {}};
   if(id==='./group.cjs')return nativeRequire('../src/group.cjs');
   if(id==='./server.cjs')return nativeRequire('../src/server.cjs');
-  if(id==='./snapshot.cjs')return {snapshot:async html=>({html})};return nativeRequire(id);
+  if(id==='./snapshot.cjs')return {...nativeRequire('../src/snapshot.cjs'),snapshot:async html=>({html})};return nativeRequire(id);
  }});
  const p=new mod.exports();p.api=api;p.state={port:17239,shares:{}};p.saveData=async()=>{};return p;
 }
@@ -46,10 +46,27 @@ test('导出失败、保存失败及预览范围变化均保留原分享',async(
  const f=fixture(),p=plugin(f.api);const token=await p.publish(root,true);const before=p.state;
  p.api=async(route,args)=>{if(route.includes('export') && args.id===child)throw new Error('导出失败');return f.api(route,args);};
  await assert.rejects(p.publish(root,true));assert.equal(p.state,before);
- p.api=f.api;p.saveData=async()=>{throw new Error('保存失败');};await assert.rejects(p.publish(root,true));assert.equal(p.state,before);
+ p.api=f.api;f.titles[root]='修改后的正文';p.saveData=async()=>{throw new Error('保存失败');};await assert.rejects(p.publish(root,true));assert.equal(p.state,before);
  const preview=await p.collect(root,true);f.children[child]=[];await assert.rejects(p.publish(root,true,preview),/范围已变化/);assert.equal(p.state.shares[token],before.shares[token]);
 });
 test('导出期间目录变化不提交新快照',async()=>{
  const f=fixture(),p=plugin(f.api);await p.publish(root,true);const before=p.state;
  p.api=async(route,args)=>{if(route.includes('export'))f.children[child]=[];return f.api(route,args);};await assert.rejects(p.publish(root,true),/范围已变化/);assert.equal(p.state,before);
+});
+test('增量更新复用正文，同时更新标题、顺序和范围',async()=>{
+ const f=fixture(),p=plugin(f.api);let writes=0;p.saveData=async()=>{writes++;};const token=await p.publish(root,true);
+ assert.equal(p.state.shares[token].stats.rendered,3);
+ await p.publish(root,true);assert.equal(p.state.shares[token].stats.rendered,0);assert.equal(p.state.shares[token].stats.reused,3);
+ assert.equal(writes,1);
+ f.titles[child]='新标题';await p.publish(root,true);
+ assert.equal(p.state.shares[token].stats.rendered,1);assert.equal(p.state.shares[token].stats.reused,2);
+ assert.equal(p.state.shares[token].docs[1].title,'新标题');
+ f.children[child]=[];await p.publish(root,true);
+ assert.equal(p.state.shares[token].docs.length,2);assert.equal(p.state.shares[token].stats.reused,2);
+});
+test('旧版快照首次更新重建指纹，之后复用正文',async()=>{
+ const f=fixture(),p=plugin(f.api);const token=await p.publish(root,true);
+ for(const doc of p.state.shares[token].docs)delete doc.sourceHash;
+ await p.publish(root,true);assert.equal(p.state.shares[token].stats.rendered,3);
+ await p.publish(root,true);assert.equal(p.state.shares[token].stats.reused,3);
 });

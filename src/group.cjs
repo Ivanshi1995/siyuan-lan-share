@@ -32,7 +32,7 @@ async function buildGroup(docs, renderDocument) {
     const result=await renderDocument(doc);
     size+=Buffer.byteLength(result.html,'utf8');
     if(size>10*1024*1024) throw new Error('正文总量超过 10 MB。请选择更小的文档目录。');
-    pages.push({id:doc.id,parentId:doc.parentId,depth:doc.depth,title:doc.title,html:result.html});
+    pages.push({id:doc.id,parentId:doc.parentId,depth:doc.depth,title:doc.title,html:result.html,...(result.sourceHash?{sourceHash:result.sourceHash}:{})});
   }
   return pages;
 }

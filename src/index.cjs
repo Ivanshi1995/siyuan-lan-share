@@ -1,7 +1,8 @@
 'use strict';
 const {Plugin, Dialog, showMessage, getFrontend, getAllEditor} = require('siyuan');
 const {ShareServer, addresses, newToken} = require('./server.cjs');
-const {snapshot} = require('./snapshot.cjs');
+const {snapshot,reuseDocument} = require('./snapshot.cjs');
+const {createHash} = require('node:crypto');
 const {collectDocuments,sameScope,buildGroup} = require('./group.cjs');
 const {Buffer} = require('node:buffer');
 module.exports = class LanShare extends Plugin {
@@ -25,7 +26,11 @@ module.exports = class LanShare extends Plugin {
     if(preview && !sameScope(docs,preview)) throw new Error('分享范围已变化。请重新预览后发布。');
     const lute=window.Lute?.New?.();
     if(!lute) throw new Error('渲染器未加载。请重启思源。');
-    const resources={assets:{},cached:new Map(),size:0};
+    const existing=Object.entries(this.state.shares).find(([,s])=>s.id===id);
+    const previous=existing?.[1];
+    const previousDocs=new Map((previous?.docs || []).map(doc=>[doc.id,doc]));
+    const stats={rendered:0,reused:0,assetsChanged:0,assetsReused:0};
+    const resources={assets:{},cached:new Map(),size:0,previousAssets:previous?.assets || {},stats};
     const readAsset=async path=>{
       const response=await fetch('/'+path.split('/').map(encodeURIComponent).join('/'),{signal:AbortSignal.timeout(30000)});
       if(!response.ok) throw new Error('附件读取失败。请检查附件是否存在。');
@@ -38,13 +43,27 @@ module.exports = class LanShare extends Plugin {
     const pages=await buildGroup(docs,async doc=>{
       const exported=await this.api('/api/export/exportMdContent',{id:doc.id,yfm:false,addTitle:false});
       if(typeof exported.content!=='string') throw new Error('正文读取失败。请重新发布。');
-      return snapshot(lute.Md2HTML(exported.content),document,readAsset,resources);
+      const sourceHash=createHash('sha256').update('snapshot-v1\0'+exported.content).digest('hex');
+      const old=previousDocs.get(doc.id);
+      if(old?.sourceHash===sourceHash && await reuseDocument(old,readAsset,resources)) {
+        stats.reused++; return {html:old.html,sourceHash};
+      }
+      const result=await snapshot(lute.Md2HTML(exported.content),document,readAsset,resources);
+      stats.rendered++; return {...result,sourceHash};
     });
     // A failed export or concurrent tree change leaves the previous share intact.
     if(!sameScope(docs,await this.collect(id,includeChildren))) throw new Error('分享范围已变化。请重新预览后发布。');
-    const existing=Object.entries(this.state.shares).find(([,s])=>s.id===id);
     const token=existing?.[0] || newToken();
-    await this.persist({...this.state,shares:{...this.state.shares,[token]:{docs:pages,assets:resources.assets,id,includeChildren,title:pages[0].title,updated:new Date().toISOString()}}});
+    const unchanged=previous && previous.includeChildren===includeChildren && previous.docs?.length===pages.length &&
+      pages.every((page,i)=>['id','parentId','depth','title','html','sourceHash'].every(key=>page[key]===previous.docs[i][key])) &&
+      Object.keys(previous.assets || {}).length===Object.keys(resources.assets).length &&
+      Object.entries(resources.assets).every(([key,asset])=>asset===previous.assets[key]);
+    if(unchanged){
+      // Keep the persisted snapshot and timestamp intact when nothing changed.
+      this.state={...this.state,shares:{...this.state.shares,[token]:{...previous,stats}}};
+      return token;
+    }
+    await this.persist({...this.state,shares:{...this.state.shares,[token]:{docs:pages,assets:resources.assets,id,includeChildren,title:pages[0].title,updated:new Date().toISOString(),stats}}});
     return token;
   }
   openSetting() {
@@ -64,7 +83,7 @@ module.exports = class LanShare extends Plugin {
         if(this.service.server) await this.service.stop();
         else {const next={...this.state,port:Number(port.value)};await this.service.start(next.port);try{await this.persist(next);}catch(e){await this.service.stop();throw e;}}
       }));
-      line('发布方式：预览文档清单后发布。更新会重新收集子文档。');
+      line('发布方式：预览文档清单后发布。更新时复用未改动的正文。');
       const editors=getAllEditor(); const current=editors.find(e=>e.protyle?.element?.closest('.layout__wnd--active')) || (editors.length===1?editors[0]:null);
       if(!selectedId) selectedId=current?.protyle?.block?.rootID || '';
       const id=input('文档编号：',selectedId,'20261109120000-abcdefg');
@@ -81,6 +100,7 @@ module.exports = class LanShare extends Plugin {
       for(const [token,s] of Object.entries(this.state.shares)) {
         const row=document.createElement('section');const title=document.createElement('strong');title.textContent=s.title;row.append(title);
         const count=document.createElement('p');count.textContent=`分享范围：${s.includeChildren?'包含全部子文档':'仅此文档'}，已发布 ${s.docs?.length || 1} 篇。`;row.append(count);
+        if(s.stats){const result=document.createElement('p');result.textContent=`最近更新：渲染 ${s.stats.rendered} 篇，复用 ${s.stats.reused} 篇；附件更新 ${s.stats.assetsChanged} 个，复用 ${s.stats.assetsReused} 个。`;row.append(result);}
         for(const ip of ips) {const url=`http://${ip}:${this.state.port}/s/${token}/`;const p=document.createElement('p');const field=document.createElement('input');field.readOnly=true;field.value=url;field.className='b3-text-field';field.onclick=()=>field.select();p.append(field,action('复制链接',()=>navigator.clipboard.writeText(url)));row.append(p);}
         row.append(action('预览并更新',async()=>{selectedId=s.id;includeChildren=!!s.includeChildren;preview=await this.collect(selectedId,includeChildren);}),action(s.includeChildren?'撤销整组分享':'撤销分享',async()=>{const shares={...this.state.shares};delete shares[token];await this.persist({...this.state,shares});}));host.append(row);
       }

@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const os = require('node:os');
 const {Buffer} = require('node:buffer');
 const {renderPage,escape} = require('./viewer.cjs');
+const {scriptHash} = require('./preview.cjs');
 class ShareServer {
   constructor(getShares) { this.getShares = getShares; this.server = null; }
   async start(port) {
@@ -19,7 +20,7 @@ class ShareServer {
     if(s) await new Promise(resolve => { s.close(resolve); s.closeAllConnections?.(); });
   }
   handle(req,res) {
-    const headers = {'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Cache-Control':'no-store','X-Frame-Options':'DENY','Content-Security-Policy':"default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"};
+    const headers = {'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Cache-Control':'no-store','X-Frame-Options':'DENY','Content-Security-Policy':`default-src 'none'; script-src 'sha256-${scriptHash}'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`};
     const send = (status,type,body,extra={}) => { res.writeHead(status,{...headers,'Content-Type':type,...extra}); res.end(req.method === 'HEAD' ? undefined : body); };
     if(!['GET','HEAD'].includes(req.method)) return send(405,'text/plain; charset=utf-8','只支持读取。',{Allow:'GET, HEAD'});
     const match = /^\/s\/([a-f0-9]{48})(?:\/(?:assets\/([a-f0-9]{64})|d\/(\d{14}-[a-z0-9]{7})\/?)?)?$/.exec(req.url || '');
